@@ -25,6 +25,10 @@ const bookingsRoutes = require('./routes/bookings');
 const paymentsRoutes = require('./routes/payments');
 const reportsRoutes = require('./routes/reports');
 const statsRoutes = require('./routes/stats');
+const auditLogsRoutes = require('./routes/audit-logs');
+const reservationAgendaRoutes = require('./routes/reservation-agenda');
+const visaAgendaRoutes = require('./routes/visa-agenda');
+const flightAgendaRoutes = require('./routes/flight-agenda');
 
 // Usar rutas
 app.use('/api/clientes', clientesRoutes);
@@ -37,6 +41,10 @@ app.use('/api/bookings', bookingsRoutes);
 app.use('/api/payments', paymentsRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/audit-logs', auditLogsRoutes);
+app.use('/api/reservation-agenda', reservationAgendaRoutes);
+app.use('/api/visa-agenda', visaAgendaRoutes);
+app.use('/api/flight-agenda', flightAgendaRoutes);
 
 // Ruta de prueba
 app.get('/', (req, res) => {

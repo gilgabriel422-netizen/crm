@@ -87,21 +87,32 @@ exports.getMe = async (req, res) => {
 // Login
 exports.login = async (req, res) => {
   try {
+    console.log('🔑 Intento de login recibido');
+    console.log('📧 Email:', req.body.email);
+    
     const { email, password } = req.body;
     
     if (!email || !password) {
+      console.log('❌ Faltan credenciales');
       return res.status(400).json({ error: 'Email y password son requeridos' });
     }
 
     const usuario = await Usuario.getByEmail(email);
     
     if (!usuario) {
+      console.log('❌ Usuario no encontrado:', email);
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
 
+    console.log('✅ Usuario encontrado:', usuario.email);
+    console.log('🔐 Hash almacenado:', usuario.password);
+    
     const isValid = await Usuario.validatePassword(password, usuario.password);
     
+    console.log('🔍 Validación de contraseña:', isValid);
+    
     if (!isValid) {
+      console.log('❌ Contraseña incorrecta');
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
 

@@ -76,6 +76,8 @@ const AdminPanel = () => {
   const [newClientData, setNewClientData] = useState({
     fecha: '',
     contrato: '',
+    contrato_suffix: '',
+    contrato_number: '',
     nombres: '',
     apellidos: '',
     cedula: '',
@@ -89,6 +91,8 @@ const AdminPanel = () => {
     tarjetas: [{ tipo: '', monto: 0, datafast: '' }],
     datafast: '',
     tipo_tarjeta: '',
+    forma_pago: '',
+    tiempo_meses: 0,
     total_venta: 0,
     iva: 0,
     neto: 0,
@@ -7941,8 +7945,10 @@ const AdminPanel = () => {
                     <input
                       type="text"
                       value={newClientData.contrato_number || '0001'}
-                      className="w-20 px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
-                      readOnly
+                      onChange={(e) => handleNewClientChange('contrato_number', e.target.value)}
+                      className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy"
+                      placeholder="0001"
+                      maxLength="4"
                     />
                   </div>
                   <div className="mt-1 text-sm text-gray-500">

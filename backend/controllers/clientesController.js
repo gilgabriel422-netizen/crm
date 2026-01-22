@@ -3,10 +3,22 @@ const Cliente = require('../models/Cliente');
 // Obtener todos los clientes
 exports.getAllClientes = async (req, res) => {
   try {
+    console.log('📋 Solicitando lista de clientes...');
     const clientes = await Cliente.getAll();
-    res.json(clientes);
+    console.log(`✅ Se encontraron ${clientes.length} clientes`);
+    
+    // Enviar en el formato que espera el frontend
+    res.json({
+      clients: clientes,
+      pagination: {
+        page: 1,
+        limit: clientes.length,
+        total: clientes.length,
+        totalPages: 1
+      }
+    });
   } catch (error) {
-    console.error('Error al obtener clientes:', error);
+    console.error('❌ Error al obtener clientes:', error);
     res.status(500).json({ error: 'Error al obtener clientes' });
   }
 };
@@ -28,12 +40,66 @@ exports.getClienteById = async (req, res) => {
 // Crear nuevo cliente
 exports.createCliente = async (req, res) => {
   try {
-    const clienteId = await Cliente.create(req.body);
-    const nuevoCliente = await Cliente.getById(clienteId);
+    console.log('📥 Datos recibidos para crear cliente:', req.body);
+    
+    // Mapear campos del frontend al backend (city/country → ciudad/pais)
+    const clientData = {
+      ...req.body,
+      ciudad: req.body.city || req.body.ciudad,
+      pais: req.body.country || req.body.pais
+    };
+    
+    // Eliminar campos duplicados
+    delete clientData.city;
+    delete clientData.country;
+    
+    // Validar campos requeridos
+    const { first_name, last_name, email, contract_number } = clientData;
+    
+    if (!first_name || !last_name) {
+      return res.status(400).json({ 
+        error: 'Los campos first_name y last_name son obligatorios',
+        received: { first_name, last_name }
+      });
+    }
+    
+    if (!email) {
+      return res.status(400).json({ 
+        error: 'El campo email es obligatorio',
+        received: { email }
+      });
+    }
+    
+    if (!contract_number) {
+      return res.status(400).json({ 
+        error: 'El campo contract_number es obligatorio',
+        received: { contract_number }
+      });
+    }
+    
+    const nuevoCliente = await Cliente.create(clientData);
+    console.log('✅ Cliente creado exitosamente:', nuevoCliente.id);
     res.status(201).json(nuevoCliente);
   } catch (error) {
-    console.error('Error al crear cliente:', error);
-    res.status(500).json({ error: 'Error al crear cliente' });
+    console.error('❌ Error al crear cliente:', error);
+    
+    // Manejar errores de duplicado
+    if (error.code === '23505') { // Código de error de PostgreSQL para violación de constraint unique
+      if (error.constraint === 'clientes_email_key') {
+        return res.status(400).json({ error: 'Ya existe un cliente con ese email' });
+      }
+      if (error.constraint === 'clientes_contract_number_key') {
+        return res.status(400).json({ 
+          error: 'Ya existe un cliente con ese número de contrato',
+          detail: 'Por favor cambia el sufijo o número del contrato'
+        });
+      }
+    }
+    
+    res.status(500).json({ 
+      error: 'Error al crear cliente',
+      details: error.message 
+    });
   }
 };
 
