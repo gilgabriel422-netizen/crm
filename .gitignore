@@ -1,0 +1,65 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Environment variables
+.env
+.env.local
+.env.production
+.env.development
+.env.test
+*.env
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+*.log
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+Thumbs.db
+desktop.ini
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+*.sql
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Testing
+coverage/
+.nyc_output/
+*.lcov
+
+# Backend specific
+backend/.env
+backend/logs/
+backend/uploads/
+
+# Frontend specific
+frontend/.env.local
+frontend/.env.production
+frontend/.env.development
+frontend/dist/
+frontend/.vite/
+
+# Scripts temporales
+*.ps1.bak
+*.sh.bak
