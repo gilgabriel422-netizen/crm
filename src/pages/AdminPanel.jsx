@@ -73,6 +73,7 @@ const AdminPanel = () => {
   const [showNewClientForm, setShowNewClientForm] = useState(false)
   const [newClientData, setNewClientData] = useState({
     fecha: '',
+    version: 'cliente',
     contrato: '',
     contrato_suffix: '',
     contrato_number: '',
@@ -100,7 +101,11 @@ const AdminPanel = () => {
     observaciones: '',
     pagare: 'No',
     fecha_pagare: '',
-    monto_pagare: 0
+    monto_pagare: 0,
+    cantidad_cuotas: 1,
+    cuotas_asumidas: 0,
+    valor_cuota: 0,
+    total_pagare: 0
   })
   
   // Estados para reservas
@@ -1837,6 +1842,23 @@ const AdminPanel = () => {
         updatedData.neto = neto
       }
     }
+
+    // Manejar campos de pagaré
+    if (field === 'monto_pagare' || field === 'cantidad_cuotas' || field === 'cuotas_asumidas') {
+      const monto = parseFloat(field === 'monto_pagare' ? value : updatedData.monto_pagare) || 0
+      const cantidad = parseInt(field === 'cantidad_cuotas' ? value : updatedData.cantidad_cuotas) || 1
+      const cuotasAsum = parseInt(field === 'cuotas_asumidas' ? value : updatedData.cuotas_asumidas) || 0
+
+      updatedData.monto_pagare = monto
+      updatedData.cantidad_cuotas = cantidad
+      updatedData.cuotas_asumidas = cuotasAsum
+
+      const valorCuota = cantidad > 0 ? monto / cantidad : 0
+      updatedData.valor_cuota = parseFloat(valorCuota.toFixed(2))
+
+      const empresaContribution = cuotasAsum * valorCuota
+      updatedData.total_pagare = Math.max(0, parseFloat((monto - empresaContribution).toFixed(2)))
+    }
     
     // Si se cambia pago mixto a "No", resetear tarjetas
     if (field === 'pago_mixto' && value === 'No') {
@@ -1899,10 +1921,31 @@ const AdminPanel = () => {
       }
 
       // Preparar datos para enviar al backend (solo campos que existen en la tabla)
+      // Generar email según la versión seleccionada si no se proporciona uno
+      let generatedEmail = newClientData.correo_electronico || ''
+      if (!generatedEmail) {
+        const cleanContract = contratoCompleto.replace(/\s+/g, '')
+        if (newClientData.version === 'clienteIB1') {
+          generatedEmail = `clienteib1${cleanContract}@kempery.com`
+        } else if (newClientData.version === 'clienteIB2') {
+          generatedEmail = `clienteib2${cleanContract}@kempery.com`
+        } else {
+          generatedEmail = `cliente${cleanContract}@kempery.com`
+        }
+      }
+
       const clientData = {
         first_name: newClientData.nombres,
         last_name: newClientData.apellidos,
-        email: newClientData.correo_electronico || `cliente${contratoCompleto.replace(/\s+/g, '')}@kempery.com`,
+        email: generatedEmail,
+        rol: newClientData.version,
+        pagare: newClientData.pagare === 'Si',
+        pagare_fecha: newClientData.fecha_pagare || null,
+        pagare_monto: parseFloat(newClientData.monto_pagare) || 0,
+        pagare_cuotas: parseInt(newClientData.cantidad_cuotas) || 1,
+        pagare_cuotas_asumidas: parseInt(newClientData.cuotas_asumidas) || 0,
+        pagare_valor_cuota: parseFloat(newClientData.valor_cuota) || 0,
+        pagare_total: parseFloat(newClientData.total_pagare) || 0,
         phone: newClientData.telefono || '',
         document_number: newClientData.cedula,
         contract_number: contratoCompleto,
@@ -1917,27 +1960,78 @@ const AdminPanel = () => {
         remaining_nights: newClientData.noches
       }
 
-      const response = await clientService.createClient(clientData)
-      console.log('Cliente creado:', response)
-      
-      // Registrar acción de auditoría
-      await logAuditAction(
-        'CREATE',
-        'CLIENT',
-        response.id,
-        null,
-        clientData,
-        `Cliente creado: ${clientData.first_name} ${clientData.last_name} - Contrato: ${contratoCompleto}`
-      )
-      
-      // Recargar la lista de clientes
-      await loadClients(currentPage, searchTerm)
-      
-      // Cerrar el formulario
-      setShowNewClientForm(false)
-      
-      // Mostrar mensaje de éxito
-      alert('Cliente creado correctamente')
+      // Si estamos en modo offline, persistir localmente en localStorage
+      const OFFLINE = (import.meta.env.VITE_OFFLINE_MODE ?? 'true') === 'true'
+      if (OFFLINE) {
+        const stored = JSON.parse(localStorage.getItem('clientes_local') || '[]')
+        const newId = stored.length > 0 ? Math.max(...stored.map(c => c.id || 0)) + 1 : Date.now()
+        const newClient = {
+          id: newId,
+          first_name: clientData.first_name,
+          last_name: clientData.last_name,
+          email: clientData.email,
+          phone: clientData.phone,
+          document_number: clientData.document_number,
+          contract_number: clientData.contract_number,
+          city: clientData.city,
+          country: clientData.country,
+          notes: clientData.notes,
+          total_amount: clientData.total_amount,
+          payment_status: clientData.payment_status,
+          international_bonus: clientData.international_bonus,
+          total_nights: clientData.total_nights,
+          remaining_nights: clientData.remaining_nights,
+          rol: clientData.rol,
+          pagare: clientData.pagare,
+          pagare_fecha: clientData.pagare_fecha,
+          pagare_monto: clientData.pagare_monto,
+          pagare_cuotas: clientData.pagare_cuotas,
+          pagare_cuotas_asumidas: clientData.pagare_cuotas_asumidas,
+          pagare_valor_cuota: clientData.pagare_valor_cuota,
+          pagare_total: clientData.pagare_total,
+          created_at: new Date().toISOString()
+        }
+        stored.unshift(newClient)
+        localStorage.setItem('clientes_local', JSON.stringify(stored))
+
+        // Actualizar estado local para mostrar inmediatamente
+        setClients(prev => [newClient, ...(prev || [])])
+
+        // Registrar auditoría (intento, en modo offline se usará adapter simulado)
+        await logAuditAction(
+          'CREATE',
+          'CLIENT',
+          newClient.id,
+          null,
+          clientData,
+          `Cliente creado (local): ${clientData.first_name} ${clientData.last_name} - Contrato: ${contratoCompleto}`
+        )
+
+        setShowNewClientForm(false)
+        alert('Cliente creado localmente')
+      } else {
+        const response = await clientService.createClient(clientData)
+        console.log('Cliente creado:', response)
+
+        // Registrar acción de auditoría
+        await logAuditAction(
+          'CREATE',
+          'CLIENT',
+          response.id,
+          null,
+          clientData,
+          `Cliente creado: ${clientData.first_name} ${clientData.last_name} - Contrato: ${contratoCompleto}`
+        )
+
+        // Recargar la lista de clientes
+        await loadClients(currentPage, searchTerm)
+
+        // Cerrar el formulario
+        setShowNewClientForm(false)
+
+        // Mostrar mensaje de éxito
+        alert('Cliente creado correctamente')
+      }
     } catch (error) {
       console.error('Error creando cliente:', error)
       alert('Error al crear el cliente')
@@ -3769,6 +3863,29 @@ const AdminPanel = () => {
     }).format(amount)
   }
 
+  // Determinar rol del cliente a partir de la propiedad `rol` o del email
+  const getClientRole = (client) => {
+    const email = (client?.email || '').toString().toLowerCase()
+    const prefix = email.split('@')[0] || ''
+    if (client?.rol) return client.rol
+    if (prefix.startsWith('clienteib1')) return 'clienteIB1'
+    if (prefix.startsWith('clienteib2')) return 'clienteIB2'
+    if (prefix.startsWith('cliente')) return 'cliente'
+    return null
+  }
+
+  const renderRoleBadge = (client) => {
+    const role = getClientRole(client)
+    if (!role) return null
+    const label = role === 'cliente' ? 'GOLD' : role === 'clienteIB1' ? 'BLUE' : role === 'clienteIB2' ? 'BLACK' : role
+    const cls = role === 'cliente' ? 'bg-yellow-400 text-white' : role === 'clienteIB1' ? 'bg-blue-600 text-white' : 'bg-gray-900 text-white'
+    return (
+      <span className={`text-xs px-2 py-0.5 rounded-full ${cls}`}>
+        {label}
+      </span>
+    )
+  }
+
   // Renderizar contenido según la sección activa
   const renderContent = () => {
     // Verificar si el usuario tiene acceso a la sección actual
@@ -4229,9 +4346,10 @@ const AdminPanel = () => {
                           >
                             <div className="flex justify-between items-start">
                               <div>
-                                <p className="font-semibold text-gray-900">
-                                  {client.first_name} {client.last_name}
-                                </p>
+                                <div className="flex items-center gap-2">
+                                  <p className="font-semibold text-gray-900">{client.first_name} {client.last_name}</p>
+                                  {renderRoleBadge(client)}
+                                </div>
                                 <p className="text-sm text-gray-600">Contrato: {client.contract_number}</p>
                                 <p className="text-sm text-gray-600">Email: {client.email}</p>
                                 <p className="text-sm text-gray-500">
@@ -4287,9 +4405,10 @@ const AdminPanel = () => {
                           >
                             <div className="flex justify-between items-start">
                               <div>
-                                <p className="font-semibold text-gray-900">
-                                  {client.first_name} {client.last_name}
-                                </p>
+                                <div className="flex items-center gap-2">
+                                  <p className="font-semibold text-gray-900">{client.first_name} {client.last_name}</p>
+                                  {renderRoleBadge(client)}
+                                </div>
                                 <p className="text-sm text-gray-600">Contrato: {client.contract_number}</p>
                                 <p className="text-sm text-gray-600">Email: {client.email}</p>
                                 <p className="text-sm text-gray-500">
@@ -4563,8 +4682,9 @@ const AdminPanel = () => {
                     {clients.map((client) => (
                       <tr key={client.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">
-                            {client.first_name} {client.last_name}
+                          <div className="flex items-center gap-2">
+                            <div className="text-sm font-medium text-gray-900">{client.first_name} {client.last_name}</div>
+                            {renderRoleBadge(client)}
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -4770,9 +4890,10 @@ const AdminPanel = () => {
                     {newCollectionClients.map((client) => (
                       <div key={client.id} className="flex items-center justify-between border border-gray-200 rounded-lg p-3">
                         <div>
-                          <p className="text-sm font-semibold text-gray-900">
-                            {client.first_name} {client.last_name}
-                          </p>
+                          <div className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                            <span>{client.first_name} {client.last_name}</span>
+                            {renderRoleBadge(client)}
+                          </div>
                           <p className="text-xs text-gray-500">{client.email || 'Sin email'}</p>
                         </div>
                         <div className="text-xs text-gray-500">
@@ -7854,6 +7975,33 @@ const AdminPanel = () => {
             </h3>
             
             <form className="space-y-4">
+              {/* Selector de versión (GOLD / BLUE / BLACK) - encima de la fecha */}
+              <div className="flex items-center gap-3 mb-2">
+                <label className="text-sm font-medium text-gray-700">Versión:</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleNewClientChange('version', 'cliente')}
+                    className={`px-3 py-1 rounded-md text-sm font-semibold ${newClientData.version === 'cliente' ? 'bg-yellow-400 text-white' : 'bg-gray-100 text-gray-700'}`}
+                  >
+                    GOLD
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleNewClientChange('version', 'clienteIB1')}
+                    className={`px-3 py-1 rounded-md text-sm font-semibold ${newClientData.version === 'clienteIB1' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                  >
+                    BLUE
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleNewClientChange('version', 'clienteIB2')}
+                    className={`px-3 py-1 rounded-md text-sm font-semibold ${newClientData.version === 'clienteIB2' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700'}`}
+                  >
+                    BLACK
+                  </button>
+                </div>
+              </div>
               {/* Primera fila */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
@@ -8327,35 +8475,85 @@ const AdminPanel = () => {
 
               {/* Campos del pagaré (solo si es "Sí") */}
               {newClientData.pagare === 'Si' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Fecha del Pagaré *
-                    </label>
-                    <input
-                      type="date"
-                      value={newClientData.fecha_pagare}
-                      onChange={(e) => handleNewClientChange('fecha_pagare', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy"
-                      required={newClientData.pagare === 'Si'}
-                    />
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Fecha del Pagaré *
+                      </label>
+                      <input
+                        type="date"
+                        value={newClientData.fecha_pagare}
+                        onChange={(e) => handleNewClientChange('fecha_pagare', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy"
+                        required={newClientData.pagare === 'Si'}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Monto del Pagaré *
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={newClientData.monto_pagare}
+                        onChange={(e) => handleNewClientChange('monto_pagare', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy"
+                        placeholder="0.00"
+                        required={newClientData.pagare === 'Si'}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Monto del Pagaré *
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={newClientData.monto_pagare}
-                      onChange={(e) => handleNewClientChange('monto_pagare', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy"
-                      placeholder="0.00"
-                      required={newClientData.pagare === 'Si'}
-                    />
+
+                  {/* Campos adicionales para pagaré */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Cantidad de Cuotas *</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={newClientData.cantidad_cuotas}
+                        onChange={(e) => handleNewClientChange('cantidad_cuotas', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy"
+                        required={newClientData.pagare === 'Si'}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Cantidad de Cuotas Asumidas *</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={newClientData.cuotas_asumidas}
+                        onChange={(e) => handleNewClientChange('cuotas_asumidas', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy"
+                        required={newClientData.pagare === 'Si'}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Valor de cada cuota</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={newClientData.valor_cuota}
+                        readOnly
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 focus:outline-none"
+                      />
+                    </div>
+                    <div className="md:col-span-3">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Total Pagaré</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={newClientData.total_pagare}
+                        readOnly
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50 focus:outline-none"
+                      />
+                    </div>
                   </div>
-                </div>
+                </>
               )}
 
               {/* Observaciones */}

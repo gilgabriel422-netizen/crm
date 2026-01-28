@@ -55,15 +55,49 @@ const getOfflineResponse = (config) => {
   if (url === '/usuarios/login' && method === 'post') {
     const email = (data?.email || '').toString().trim().toLowerCase();
     const password = (data?.password || '').toString();
-    if ((email === 'admin' || email === 'admin@crm.com') && password === 'innovetion') {
-      const usuario = { id: 1, nombre: 'Administrador', email: data.email, rol: 'admin' };
-      return { status: 200, data: { token: createMockToken(usuario), usuario } };
+
+    // Allow the shared offline password for all demo dashboards
+    const allowedPassword = 'innovetion';
+
+    if (password !== allowedPassword) {
+      return { status: 401, data: { error: 'Credenciales inválidas' } };
     }
-    if (email === 'cliente' && password === 'innovetion') {
-      const usuario = { id: 2, nombre: 'Cliente', email: data.email, rol: 'cliente' };
-      return { status: 200, data: { token: createMockToken(usuario), usuario } };
+
+    // Normalize email prefix to determine role
+    const prefix = email.split('@')[0];
+
+    // Map common prefixes to roles (incluye dashboards locales)
+    const roleMap = {
+      'admin': 'admin',
+      'admincrm': 'admin',
+      'cliente': 'cliente',
+      'clienteib1': 'clienteIB1',
+      'cliente_ib1': 'clienteIB1',
+      'cliente-ib1': 'clienteIB1',
+      'clienteib2': 'clienteIB2',
+      'cliente_ib2': 'clienteIB2',
+      'cliente-ib2': 'clienteIB2',
+      'cobranzas': 'cobranzas',
+      'contratos': 'contratos',
+      'atencion': 'atencion',
+      'postventa': 'postventa'
+    };
+
+    let rol = roleMap[prefix] || (email === 'admin@crm.com' ? 'admin' : (prefix.startsWith('cliente') ? 'cliente' : null));
+    // Permitir roles personalizados para dashboards locales
+    if (!rol && ['contratos','atencion','postventa','cobranzas'].includes(prefix)) {
+      rol = prefix;
     }
-    return { status: 401, data: { error: 'Credenciales inválidas' } };
+    if (!rol) {
+      return { status: 401, data: { error: 'Credenciales inválidas' } };
+    }
+    const usuario = {
+      id: rol === 'admin' ? 1 : rol === 'cliente' ? 2 : rol === 'clienteIB1' ? 3 : rol === 'clienteIB2' ? 4 : 100 + Math.floor(Math.random()*1000),
+      nombre: rol.charAt(0).toUpperCase() + rol.slice(1),
+      email: data.email,
+      rol
+    };
+    return { status: 200, data: { token: createMockToken(usuario), usuario } };
   }
 
   if (url === '/usuarios/me' && method === 'get') {

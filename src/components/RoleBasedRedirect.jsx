@@ -5,6 +5,8 @@ import AdminPanelWrapper from './AdminPanelWrapper'
 import EmployeePanel from '../pages/EmployeePanel'
 import CobranzasPanel from '../pages/CobranzasPanel'
 import ClientePanel from '../pages/ClientePanel'
+import ClienteIB1Panel from '../pages/ClienteIB1Panel'
+import ClienteIB2Panel from '../pages/ClienteIB2Panel'
 
 const RoleBasedRedirect = () => {
   const { user } = useAuth()
@@ -38,6 +40,14 @@ const RoleBasedRedirect = () => {
       return <EmployeePanel />
     case 'cliente':
       return <ClientePanel />
+    case 'clienteIB1':
+    case 'cliente_ib1':
+    case 'cliente-ib1':
+      return <ClienteIB1Panel />
+    case 'clienteIB2':
+    case 'cliente_ib2':
+    case 'cliente-ib2':
+      return <ClienteIB2Panel />
     default:
       return (
         <div className="min-h-screen bg-gray-100 flex items-center justify-center">

@@ -1,4 +1,8 @@
-import React from 'react'
+import React, { lazy, Suspense } from 'react'
+const DashboardCobranzas = lazy(() => import('./pages/DashboardCobranzas.jsx'));
+const DashboardContratos = lazy(() => import('./pages/DashboardContratos.jsx'));
+const DashboardAtencionCliente = lazy(() => import('./pages/DashboardAtencionCliente.jsx'));
+const DashboardPostventa = lazy(() => import('./pages/DashboardPostventa.jsx'));
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -79,6 +83,10 @@ function App() {
                 <RoleBasedRedirect />
               </ProtectedRoute>
             } />
+            <Route path="/dashboard-cobranzas" element={<Suspense fallback={<div>Cargando...</div>}><Navbar /><div className="pt-8"><DashboardCobranzas /></div><Footer /></Suspense>} />
+            <Route path="/dashboard-contratos" element={<Suspense fallback={<div>Cargando...</div>}><Navbar /><div className="pt-8"><DashboardContratos /></div><Footer /></Suspense>} />
+            <Route path="/dashboard-atencion" element={<Suspense fallback={<div>Cargando...</div>}><Navbar /><div className="pt-8"><DashboardAtencionCliente /></div><Footer /></Suspense>} />
+            <Route path="/dashboard-postventa" element={<Suspense fallback={<div>Cargando...</div>}><Navbar /><div className="pt-8"><DashboardPostventa /></div><Footer /></Suspense>} />
           </Routes>
         </div>
       </AuthProvider>
